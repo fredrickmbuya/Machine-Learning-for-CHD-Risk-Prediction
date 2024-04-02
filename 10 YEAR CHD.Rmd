@@ -1,0 +1,378 @@
+---
+title: "Assessing 10-Year Risk of Coronary Heart Disease"
+author: "Fredrick George Mbuya"
+date: "2023-06-23"
+output:
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+  pdf_document:
+    toc: yes
+    toc_depth: 3
+    number_sections: yes
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Importing Essential R Packages
+```{r}
+# Importing the 'modeest' package for estimating statistical modes or working with statistical distributions
+library(modeest)
+
+# Importing the 'ggplot2' package for creating visually appealing and customizable plots
+library(ggplot2)
+
+# Importing the 'lattice' package for creating conditioned plots
+library(lattice)
+
+# Importing the 'caret' package for machine learning tasks such as data preprocessing, model training, and performance evaluation
+library(caret)
+
+# Importing the 'mlbench' package for benchmark datasets commonly used in machine learning research
+library(mlbench)
+
+# Importing the 'dlookr' package for data exploration and outlier detection
+library(dlookr)
+
+# Importing the 'ROSE' package for dealing with imbalance data
+library(ROSE)
+```
+
+# Reading the dataset
+```{r}
+# Reading the csv data file "Main data.csv" into the 'CHD' dataframe
+CHD <- read.csv("Main data.csv", stringsAsFactors = TRUE, na.strings = TRUE)
+```
+
+# Data pre-preparation/pre-processing
+## Summary Statistics
+```{r}
+# Generating a summary of the 'CHD' dataframe
+summary(CHD)
+```
+
+Here's a brief description of the summary result:
+
+- `id`: The identifier variable with a range of values from 0 to 3389.
+- `age`: The age of the individuals in the dataset, ranging from 32 to 70 years.
+- `education`: The level of education, represented by numeric values ranging from 1 to 4.
+- `sex`: The gender of the individuals, with "F" representing females and "M" representing males.
+- `is_smoking`: Indicates whether the individual is a smoker, with "NO" indicating non-smokers and "YES" indicating smokers.
+- `cigsPerDay`: The average number of cigarettes smoked per day, ranging from 0 to 70.
+- `BPMeds`: Indicates whether the individual is taking blood pressure medication, with values of 0 or 1.
+- `prevalentStroke`: Indicates whether the individual had a prevalent stroke, with values of 0 or 1.
+- `prevalentHyp`: Indicates whether the individual has prevalent hypertension, with values of 0 or 1.
+- `diabetes`: Indicates whether the individual has diabetes, with values of 0 or 1.
+- `totChol`: Total cholesterol level, ranging from 107 to 696.
+- `sysBP`: Systolic blood pressure, ranging from 83.5 to 295.
+- `diaBP`: Diastolic blood pressure, ranging from 48 to 142.5.
+- `BMI`: Body Mass Index, ranging from 15.96 to 56.8.
+- `heartRate`: Heart rate in beats per minute, ranging from 45 to 143.
+- `glucose`: Blood glucose level, ranging from 40 to 394.
+- `TenYearCHD`: Indicates whether the individual had a coronary heart disease event within ten years, with values of 0 or 1.
+
+  .The summary result also indicates the presence of missing values (NA) in certain variables, as denoted by the number of NA entries mentioned under each variable.
+
+
+## Examining the Structure of the Dataset
+```{r}
+# Displaying the structure of the 'CHD' dataframe
+str(CHD)
+```
+
+Here's a brief description of the displayed information:
+
+- The dataframe contains 3390 observations or rows and has 17 variables or columns.
+
+The description below provides details about each variable/column:
+
+- `id`: An integer variable representing the identifier, ranging from 0 to higher values.
+- `age`: An integer variable representing the age of individuals.
+- `education`: A numeric variable representing the level of education.
+- `sex`: A factor variable indicating the gender, with two levels "F" and "M".
+- `is_smoking`: A factor variable indicating smoking status, with two levels "NO" and "YES".
+- `cigsPerDay`: A numeric variable representing the average number of cigarettes smoked per day.
+- `BPMeds`: A numeric variable indicating whether the individual is taking blood pressure medication.
+- `prevalentStroke`: An integer variable indicating whether the individual had a prevalent stroke.
+- `prevalentHyp`: An integer variable indicating whether the individual has prevalent hypertension.
+- `diabetes`: An integer variable indicating whether the individual has diabetes.
+- `totChol`: A numeric variable representing total cholesterol level.
+- `sysBP`: A numeric variable representing systolic blood pressure.
+- `diaBP`: A numeric variable representing diastolic blood pressure.
+- `BMI`: A numeric variable representing Body Mass Index.
+- `heartRate`: A numeric variable representing heart rate in beats per minute.
+- `glucose`: A numeric variable representing blood glucose level.
+- `TenYearCHD`: An integer variable indicating whether the individual had a coronary heart disease event within ten years.
+
+## Droping irrelevant Variables(Id and Education)
+```{r}
+# Creating a new dataframe 'CHD_NEW' by excluding the 'id' and 'education' columns from the 'CHD' dataframe
+CHD_NEW <- CHD[, -c(1, 3)]
+```
+
+## Converting categorical to factor
+```{r}
+# Converting selected variables in the 'CHD_NEW' dataframe to factor type
+CHD_NEW$BPMeds <- as.factor(CHD_NEW$BPMeds)
+CHD_NEW$prevalentStroke <- as.factor(CHD_NEW$prevalentStroke)
+CHD_NEW$prevalentHyp <- as.factor(CHD_NEW$prevalentHyp)
+CHD_NEW$diabetes <- as.factor(CHD_NEW$diabetes)
+CHD_NEW$TenYearCHD <- as.factor(CHD_NEW$TenYearCHD)
+```
+
+## Missing values handling
+```{r}
+# Calculating the column-wise sum of missing values in the 'CHD_NEW' dataframe
+colSums(is.na(CHD_NEW))
+
+# Imputing missing values with the corresponding median value for numerical variables
+CHD_NEW$cigsPerDay[is.na(CHD_NEW$cigsPerDay)] <- median(CHD_NEW$cigsPerDay, na.rm = TRUE)
+CHD_NEW$totChol[is.na(CHD_NEW$totChol)] <- median(CHD_NEW$totChol, na.rm = TRUE)
+CHD_NEW$BMI[is.na(CHD_NEW$BMI)] <- median(CHD_NEW$BMI, na.rm = TRUE)
+CHD_NEW$heartRate[is.na(CHD_NEW$heartRate)] <- median(CHD_NEW$heartRate, na.rm = TRUE)
+CHD_NEW$glucose[is.na(CHD_NEW$glucose)] <- median(CHD_NEW$glucose, na.rm = TRUE)
+
+#Imputing missing values in 'BPMeds' column with the most frequent value(mode)
+CHD_NEW$BPMeds[is.na(CHD_NEW$BPMeds)] <- mfv(CHD_NEW$BPMeds, na_rm = TRUE)
+```
+
+From the output:
+
+- There are no missing values in the 'age' column.
+- There are no missing values in the 'sex' column.
+- There are no missing values in the 'is_smoking' column.
+- There are 22 missing values in the 'cigsPerDay' column.
+- There are 44 missing values in the 'BPMeds' column.
+- There are no missing values in the 'prevalentStroke' column.
+- There are no missing values in the 'prevalentHyp' column.
+- There are no missing values in the 'diabetes' column.
+- There are 38 missing values in the 'totChol' column.
+- There are no missing values in the 'sysBP' column.
+- There are no missing values in the 'diaBP' column.
+- There are 14 missing values in the 'BMI' column.
+- There is 1 missing value in the 'heartRate' column.
+- There are 304 missing values in the 'glucose' column.
+- There are no missing values in the 'TenYearCHD' column.
+
+## Duplicates checking
+```{r}
+# Removing duplicate rows
+CHD_NEW <- unique(CHD_NEW)
+```
+
+## Variable Encoding
+```{r}
+# Converting 'is_smoking' column to binary indicator
+CHD_NEW$is_smoking <- ifelse(CHD_NEW$is_smoking == "YES", 1, 0)
+
+# Converting 'sex' column to binary indicator
+CHD_NEW$sex <- ifelse(CHD_NEW$sex == "M", 1, 0)
+
+# Converting 'is_smoking' and 'sex' columns to factors
+CHD_NEW$is_smoking <- as.factor(CHD_NEW$is_smoking)
+CHD_NEW$sex <- as.factor(CHD_NEW$sex)
+```
+
+## Outliers handling
+```{r}
+# Selecting numerical variables from CHD_NEW dataframe
+numerical_vars <- CHD_NEW[, sapply(CHD_NEW, is.numeric)]
+
+# Plot outliers in numerical variables
+plot_outlier(numerical_vars)
+
+# Identify nature of outliers using boxplot statistics
+boxplot.stats(CHD_NEW$age)$out 
+boxplot.stats(CHD_NEW$cigsPerDay)$out
+boxplot.stats(CHD_NEW$totChol)$out
+boxplot.stats(CHD_NEW$sysBP)$out 
+boxplot.stats(CHD_NEW$diaBP)$out 
+boxplot.stats(CHD_NEW$BMI)$out
+boxplot.stats(CHD_NEW$heartRate)$out 
+boxplot.stats(CHD_NEW$glucose)$out
+```
+
+# Data analysis
+## Correlation matrix
+```{r}
+# Selecting numerical variables from CHD_NEW dataframe
+numerical_vars <- CHD_NEW[, sapply(CHD_NEW, is.numeric)]
+
+# Calculating correlation matrix and rounding to 2 decimal places
+round(cor(numerical_vars), 2)
+```
+Here is a brief description of the correlations:
+
+- Age has a positive correlation with totChol (0.27), sysBP (0.40), and diaBP (0.22), indicating that older individuals tend to have higher cholesterol levels and blood pressure.
+- There is a weak negative correlation between age and cigsPerDay (-0.19), suggesting that older individuals tend to smoke fewer cigarettes per day.
+- There are no significant correlations between age and heartRate or glucose.
+- CigsPerDay shows a weak negative correlation with heartRate (-0.10) and a weak positive correlation with glucose (0.07). This indicates that higher cigarette consumption is associated with slightly lower heart rate and slightly higher glucose levels.
+- TotChol has a weak positive correlation with sysBP (0.20) and diaBP (0.15), suggesting a potential association between cholesterol levels and blood pressure.
+- SysBP and diaBP exhibit a strong positive correlation of 0.78, indicating a strong relationship between systolic and diastolic blood pressure.
+- BMI shows weak positive correlations with sysBP (0.33) and diaBP (0.38), indicating a potential association between body mass index and blood pressure.
+- HeartRate has a weak positive correlation with sysBP (0.18) and a weak positive correlation with glucose (0.08).
+- Glucose has a weak positive correlation with sysBP (0.14), diaBP (0.07), BMI (0.09), and heartRate (0.08), suggesting a potential association between glucose levels and these variables.
+
+
+## Logistic regression
+```{r}
+# Attaching the CHD_NEW data frame
+attach(CHD_NEW)
+
+# Building the logistic regression model
+logit_model <- glm(TenYearCHD ~ age + sex + is_smoking + cigsPerDay + BPMeds + prevalentStroke +
+                   prevalentHyp + diabetes + totChol + sysBP + diaBP + BMI + heartRate + glucose,
+                   family = binomial)
+
+# Summarizing the logistic regression model
+summary(logit_model)
+```
+
+  .Age, Sex, Cigarettes per Day, Prevalent Stroke, Total Cholesterol, Systolic Blood Pressure, and Glucose demonstrated a statistically significant relationship with the TenYearCHD outcome. These variables have shown a significant impact on predicting the likelihood of TenYearCHD when accounting for other variables in the model.
+
+## Removing non-significant variables using step
+```{r}
+# Perform stepwise selection on the logistic regression model
+logit_modelB <- step(logit_model)
+
+# Generate a summary of the updated model's results
+summary(logit_modelB)
+```
+
+## Odd ratios and Odds
+```{r}
+# Calculate the odds ratios for the variables in the logistic regression model
+# using the logit_modelB object
+
+exp(coef(logit_modelB))
+```
+Based on odds ratios, here is the interpretation of the effects of the independent variables on the dependent variable:
+
+- Intercept: The odds of the dependent variable occurring when all the independent variables are zero is extremely low (approximately 0.000117). This can be interpreted as the baseline odds of the dependent variable.
+
+- Age: For every one-unit increase in age, the odds of the dependent variable increase by approximately 6.7%. This suggests that older age is associated with a slightly higher likelihood of the dependent variable occurring.
+
+- Sex: Being male (sex1) increases the odds of the dependent variable occurring by approximately 61% compared to being female (sex0). This indicates that males have a higher likelihood of the dependent variable occurring compared to females.
+
+- cigsPerDay: For every one-unit increase in the number of cigarettes smoked per day, the odds of the dependent variable occurring increase by approximately 2.5%. This suggests that higher cigarette consumption is associated with a slightly higher likelihood of the dependent variable occurring.
+
+- prevalentStroke: Individuals with a prevalent stroke (prevalentStroke1) have approximately 244% higher odds of the dependent variable occurring compared to those without a prevalent stroke (prevalentStroke0). This suggests that a previous stroke is strongly associated with an increased likelihood of the dependent variable occurring.
+
+- totChol: For every one-unit increase in total cholesterol levels, the odds of the dependent variable occurring increase by approximately 0.3%. This suggests that higher total cholesterol levels are associated with a slightly higher likelihood of the dependent variable occurring.
+
+- sysBP: For every one-unit increase in systolic blood pressure, the odds of the dependent variable occurring increase by approximately 1.6%. This indicates that higher systolic blood pressure is associated with a slightly higher likelihood of the dependent variable occurring.
+
+- glucose: For every one-unit increase in glucose levels, the odds of the dependent variable occurring increase by approximately 0.9%. This suggests that higher glucose levels are associated with a slightly higher likelihood of the dependent variable occurring.
+
+# Random Forest Model for Ten-Year CHD Risk Prediction
+## Using full set of variables
+```{r}
+# Set the random seed for reproducibility
+set.seed(1994)
+
+# Determine the number of rows in the 'CHD_NEW' data frame
+n_rows <- nrow(CHD_NEW)
+
+# Create a random sample of indices for splitting the data into training and testing sets (70% for training)
+idx <- sample(n_rows, n_rows*0.7)
+
+# Create the training and testing data sets using the sampled indices
+trainData <- CHD_NEW[idx,]
+testData <- CHD_NEW[-idx,]
+
+# Counting the number of occurrences of each class in the original trainData
+table(trainData$TenYearCHD)
+
+# Applying the ROSE (Random Over-Sampling Examples) algorithm to balance the data
+balanced_data <- ROSE(TenYearCHD ~ . , data = trainData)
+balanced_data <- balanced_data$data
+
+# Counting the number of occurrences of each class in the balanced_data
+table(balanced_data$TenYearCHD)
+
+# Define the formula for the random forest model using the relevant features
+rf_formula <- TenYearCHD ~ age + sex + is_smoking + cigsPerDay + BPMeds + prevalentStroke + prevalentHyp +               diabetes + totChol + sysBP + diaBP + BMI + heartRate + glucose
+
+# Set up cross-validation parameters for the model (100 iterations)
+parameters_cv <- trainControl(method = 'CV', number = 100, savePredictions = "final")
+
+# Train the random forest model
+rf_model_CV <- train(rf_formula, data = balanced_data, method='rf', trControl=parameters_cv)
+
+# Display the cross-validation model
+rf_model_CV
+
+# Make predictions
+predictions_CV <- predict(rf_model_CV, testData[,-15], type = 'raw')
+
+# Computing the confusion matrix for predictions_CV and actual labels in testData
+co_matrix_cv <- confusionMatrix(predictions_CV, testData$TenYearCHD)
+co_matrix_cv
+```
+. The performance metrics scores offer invaluable insights into the model's effectiveness. With an accuracy rate of 76.79%, the model demonstrates a notable proportion of correct predictions. Notably, a sensitivity of 83.73% highlights the model's exceptional capability in accurately identifying positive cases (CHD events), while a specificity of 40.83% indicates its moderate proficiency in correctly pinpointing negative cases (non-CHD events). These findings strongly advocate for the RF algorithm as the preferred choice for predicting the likelihood of CHD events, leveraging a comprehensive set of independent variables.
+
+## Using only significant factors 
+```{r}
+#dropping insignificant variables
+CHD_NEW_NEW <- CHD_NEW[, -c(3,5,7,8,11,12,13)]
+
+# Set the random seed for reproducibility
+set.seed(1994)
+
+# Determine the number of rows in the 'tree_data' data frame
+n_rows <- nrow(CHD_NEW_NEW)
+
+# Create a random sample of indices for splitting the data into training and testing sets (70% for training)
+idx2 <- sample(n_rows, n_rows*0.7)
+
+# Create the training and testing data sets using the sampled indices
+trainDataa <- CHD_NEW_NEW[idx,]
+testDataa <- CHD_NEW_NEW[-idx,]
+
+# Counting the number of occurrences of each class in the original trainData
+table(trainDataa$TenYearCHD)
+
+# Applying the ROSE (Random Over-Sampling Examples) algorithm to balance the data
+balanced_data2 <- ROSE(TenYearCHD ~ . , data = trainDataa)
+balanced_data2 <- balanced_data$data
+
+# Counting the number of occurrences of each class in the balanced_data
+table(balanced_data2$TenYearCHD)
+
+# Define the formula for the random forest model using the relevant features
+rf_formula2 <- TenYearCHD ~ age + sex + cigsPerDay + prevalentStroke + totChol + sysBP + glucose
+
+# Set up cross-validation parameters for the model (1000 iterations)
+parameters_cv2 <- trainControl(method = 'CV', number = 100, savePredictions = "final")
+
+# Train the decision tree model using cross-validation
+rf_model_CV2 <- train(rf_formula2, data = balanced_data2, method='rf', trControl=parameters_cv2)
+
+# Display the cross-validation
+rf_model_CV2
+
+# Make predictions using the cross-validation
+predictions_CV2 <- predict(rf_model_CV2, testData[,-15], type = 'raw')
+
+# Computing the confusion matrix for predictions_CV2 and actual labels in testData
+co_table <- confusionMatrix(predictions_CV2, testData$TenYearCHD)
+co_table
+```
+. The model achieves an accuracy of 96.26% indicating high level of precision in predicting the 10-year risk of CHD. The model shows perfect sensitivity (100%) in correctly identifying positive cases (CHD events). The specificity is 77.51%, indicating the model's ability to accurately identify negative cases (non-CHD events). Overall, the RF algorithm,when trained with only the most significant factors, demonstrates excellent performance and predictive power in determining the 10-year risk of CHD.
+
+# Variable Importance Comparison for Random Forest Models
+```{r}
+# Extract variable importance using varImp function for rf_model_CV
+var_importance1 <- varImp(rf_model_CV)
+var_importance1
+
+# Extract variable importance using varImp function for rf_model_CV2
+var_importance2 <- varImp(rf_model_CV2)
+var_importance2
+```
+
+. In both models, variable importance measures underscore the significance of age, systolic blood pressure, total cholesterol levels, glucose, and cigarettes smoked per day in predicting the 10-year risk of CHD. However, variables such as sex and history of stroke demonstrate comparatively lower importance scores when contrasted with the aforementioned factors.
